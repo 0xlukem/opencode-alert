@@ -1,22 +1,34 @@
+import { EventEmitter } from "events";
+
 jest.mock("os", () => ({
   platform: jest.fn().mockReturnValue("darwin"),
 }));
 
 jest.mock("child_process", () => ({
-  exec: jest.fn((cmd: string, cb: Function) => cb(null, "", "")),
+  spawn: jest.fn(),
 }));
 
 import { showToast } from "../toast";
 import { platform } from "os";
-import { exec } from "child_process";
+import { spawn } from "child_process";
 
 const mockPlatform = platform as jest.Mock;
-const mockExec = exec as unknown as jest.Mock;
+const mockSpawn = spawn as unknown as jest.Mock;
+
+function createMockChildProcess(exitCode: number = 0) {
+  const child = new EventEmitter() as any;
+  child.stdout = undefined;
+  child.stderr = undefined;
+  process.nextTick(() => {
+    child.emit("close", exitCode);
+  });
+  return child;
+}
 
 describe("showToast", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockExec.mockImplementation((cmd: string, cb: Function) => cb(null, "", ""));
+    mockSpawn.mockImplementation(() => createMockChildProcess(0));
   });
 
   describe("macOS (darwin)", () => {
@@ -27,31 +39,56 @@ describe("showToast", () => {
     it("shows toast using osascript", async () => {
       await showToast("Test Title", "Test Message");
 
-      expect(mockExec).toHaveBeenCalledWith(
-        expect.stringContaining('display notification "Test Message" with title "Test Title"'),
-        expect.any(Function)
+      expect(mockSpawn).toHaveBeenCalledWith(
+        "osascript",
+        expect.arrayContaining([
+          "-e",
+          'display notification "Test Message" with title "Test Title"',
+        ]),
+        expect.objectContaining({ shell: false })
       );
     });
 
-    it("escapes quotes in title and message", async () => {
+    it("escapes quotes in title and message for osascript", async () => {
       await showToast('Title with "quotes"', 'Message with "quotes"');
 
-      expect(mockExec).toHaveBeenCalledWith(
-        expect.stringContaining('display notification "Message with \\"quotes\\"" with title "Title with \\"quotes\\""'),
-        expect.any(Function)
+      expect(mockSpawn).toHaveBeenCalledWith(
+        "osascript",
+        expect.arrayContaining([
+          "-e",
+          'display notification "Message with \\"quotes\\"" with title "Title with \\"quotes\\""',
+        ]),
+        expect.anything()
       );
+    });
+
+    it("does not allow shell injection via backticks, dollars or semicolons", async () => {
+      const maliciousTitle = 'Title"; `rm -rf /` $(id)';
+      const maliciousMessage = 'Message"; $HOME';
+
+      await showToast(maliciousTitle, maliciousMessage);
+
+      // With spawn + shell: false, the shell never sees these characters.
+      // They should be passed literally into the AppleScript string.
+      const [, args] = mockSpawn.mock.calls[0];
+      const script = args[1];
+      expect(script).toContain('\\"');
+      expect(script).toContain("rm -rf /");
+      expect(script).toContain("$(id)");
+      expect(script).toContain("$HOME");
     });
 
     it("falls back to terminal-notifier when osascript fails", async () => {
-      mockExec
-        .mockImplementationOnce((cmd: string, cb: Function) => cb(new Error("osascript failed")))
-        .mockImplementationOnce((cmd: string, cb: Function) => cb(null, "", ""));
+      mockSpawn
+        .mockImplementationOnce(() => createMockChildProcess(1))
+        .mockImplementationOnce(() => createMockChildProcess(0));
 
       await showToast("Test", "Message");
 
-      expect(mockExec).toHaveBeenCalledWith(
-        expect.stringContaining('terminal-notifier'),
-        expect.any(Function)
+      expect(mockSpawn).toHaveBeenCalledWith(
+        "terminal-notifier",
+        ["-title", "Test", "-message", "Message"],
+        expect.anything()
       );
     });
   });
@@ -64,21 +101,36 @@ describe("showToast", () => {
     it("shows toast using notify-send", async () => {
       await showToast("Test Title", "Test Message");
 
-      expect(mockExec).toHaveBeenCalledWith('notify-send "Test Title" "Test Message"', expect.any(Function));
+      expect(mockSpawn).toHaveBeenCalledWith(
+        "notify-send",
+        ["Test Title", "Test Message"],
+        expect.anything()
+      );
     });
 
-    it("escapes quotes in title and message", async () => {
-      await showToast('Title with "quotes"', 'Message with "quotes"');
+    it("does not allow shell injection on Linux", async () => {
+      const maliciousTitle = 'Title"; `rm -rf /` $(id)';
+      const maliciousMessage = 'Message"; $HOME';
 
-      expect(mockExec).toHaveBeenCalledWith('notify-send "Title with \\"quotes\\"" "Message with \\"quotes\\""', expect.any(Function));
+      await showToast(maliciousTitle, maliciousMessage);
+
+      expect(mockSpawn).toHaveBeenCalledWith(
+        "notify-send",
+        [maliciousTitle, maliciousMessage],
+        expect.anything()
+      );
     });
 
     it("handles notify-send not being available", async () => {
-      mockExec.mockImplementation((cmd: string, cb: Function) => cb(new Error("notify-send not found")));
+      mockSpawn.mockImplementation(() => createMockChildProcess(1));
 
       await showToast("Test", "Message");
 
-      expect(mockExec).toHaveBeenCalledWith('notify-send "Test" "Message"', expect.any(Function));
+      expect(mockSpawn).toHaveBeenCalledWith(
+        "notify-send",
+        ["Test", "Message"],
+        expect.anything()
+      );
     });
   });
 
@@ -90,31 +142,39 @@ describe("showToast", () => {
     it("shows toast using PowerShell", async () => {
       await showToast("Test Title", "Test Message");
 
-      expect(mockExec).toHaveBeenCalledWith(
-        expect.stringContaining("ToastNotificationManager"),
-        expect.any(Function)
+      expect(mockSpawn).toHaveBeenCalledWith(
+        "powershell",
+        expect.arrayContaining([
+          "-Command",
+          expect.stringContaining("ToastNotificationManager"),
+        ]),
+        expect.anything()
       );
     });
 
     it("escapes single quotes in title and message", async () => {
       await showToast("Title with 'quotes'", "Message with 'quotes'");
 
-      expect(mockExec).toHaveBeenCalledWith(
-        expect.stringContaining("Title with ''quotes''"),
-        expect.any(Function)
-      );
+      const [, args] = mockSpawn.mock.calls[0];
+      const script = args[1];
+      expect(script).toContain("Title with ''quotes''");
+      expect(script).toContain("Message with ''quotes''");
     });
 
     it("falls back to MessageBox when toast fails", async () => {
-      mockExec
-        .mockImplementationOnce((cmd: string, cb: Function) => cb(new Error("Toast failed")))
-        .mockImplementationOnce((cmd: string, cb: Function) => cb(null, "", ""));
+      mockSpawn
+        .mockImplementationOnce(() => createMockChildProcess(1))
+        .mockImplementationOnce(() => createMockChildProcess(0));
 
       await showToast("Test", "Message");
 
-      expect(mockExec).toHaveBeenCalledWith(
-        expect.stringContaining("MessageBox"),
-        expect.any(Function)
+      expect(mockSpawn).toHaveBeenCalledWith(
+        "powershell",
+        expect.arrayContaining([
+          "-Command",
+          expect.stringContaining("MessageBox"),
+        ]),
+        expect.anything()
       );
     });
   });
@@ -123,7 +183,9 @@ describe("showToast", () => {
     it("throws error for unsupported platforms", async () => {
       mockPlatform.mockReturnValue("freebsd");
 
-      await expect(showToast("Test", "Message")).rejects.toThrow("Unsupported platform: freebsd");
+      await expect(showToast("Test", "Message")).rejects.toThrow(
+        "Unsupported platform: freebsd"
+      );
     });
   });
 });

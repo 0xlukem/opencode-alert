@@ -1,17 +1,5 @@
-import { exec } from "child_process";
 import { platform } from "os";
-
-function execAsync(command: string): Promise<{ stdout: string; stderr: string }> {
-  return new Promise((resolve, reject) => {
-    exec(command, (error, stdout, stderr) => {
-      if (error) {
-        reject(error);
-      } else {
-        resolve({ stdout, stderr });
-      }
-    });
-  });
-}
+import { spawnAsync } from "./spawn";
 
 export async function showToast(title: string, message: string): Promise<void> {
   switch (platform()) {
@@ -30,21 +18,26 @@ export async function showToast(title: string, message: string): Promise<void> {
 }
 
 async function showMacOSToast(title: string, message: string): Promise<void> {
+  // Escape double quotes for AppleScript string literals
   const escapedTitle = title.replace(/"/g, '\\"');
   const escapedMessage = message.replace(/"/g, '\\"');
 
   // Try osascript first (built-in)
   try {
-    await execAsync(
-      `osascript -e 'display notification "${escapedMessage}" with title "${escapedTitle}"'`
-    );
+    await spawnAsync("osascript", [
+      "-e",
+      `display notification "${escapedMessage}" with title "${escapedTitle}"`,
+    ]);
     return;
   } catch {
     // Fallback to terminal-notifier if available
     try {
-      await execAsync(
-        `terminal-notifier -title "${escapedTitle}" -message "${escapedMessage}"`
-      );
+      await spawnAsync("terminal-notifier", [
+        "-title",
+        title,
+        "-message",
+        message,
+      ]);
     } catch {
       // Silent fallback
     }
@@ -52,19 +45,15 @@ async function showMacOSToast(title: string, message: string): Promise<void> {
 }
 
 async function showLinuxToast(title: string, message: string): Promise<void> {
-  const escapedTitle = title.replace(/"/g, '\\"');
-  const escapedMessage = message.replace(/"/g, '\\"');
-
   try {
-    await execAsync(
-      `notify-send "${escapedTitle}" "${escapedMessage}"`
-    );
+    await spawnAsync("notify-send", [title, message]);
   } catch {
     // Silent fallback
   }
 }
 
 async function showWindowsToast(title: string, message: string): Promise<void> {
+  // Escape single quotes for PowerShell string literals
   const escapedTitle = title.replace(/'/g, "''");
   const escapedMessage = message.replace(/'/g, "''");
 
@@ -78,11 +67,14 @@ async function showWindowsToast(title: string, message: string): Promise<void> {
   `;
 
   try {
-    await execAsync(`powershell -Command "${psCommand}"`);
+    await spawnAsync("powershell", ["-Command", psCommand]);
   } catch {
     // Fallback to simpler notification
     try {
-      await execAsync(`powershell -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show('${escapedMessage}', '${escapedTitle}')"`);
+      await spawnAsync("powershell", [
+        "-Command",
+        `Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show('${escapedMessage}', '${escapedTitle}')`,
+      ]);
     } catch {
       // Silent fallback
     }

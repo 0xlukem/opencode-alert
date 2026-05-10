@@ -1,20 +1,7 @@
-import { exec } from "child_process";
-import { platform } from "os";
+import { platform, homedir } from "os";
 import { existsSync } from "fs";
 import { join, resolve } from "path";
-import { homedir } from "os";
-
-function execAsync(command: string): Promise<{ stdout: string; stderr: string }> {
-  return new Promise((resolve, reject) => {
-    exec(command, (error, stdout, stderr) => {
-      if (error) {
-        reject(error);
-      } else {
-        resolve({ stdout, stderr });
-      }
-    });
-  });
-}
+import { spawnAsync } from "./spawn";
 
 type SoundType = "success" | "attention" | "error";
 
@@ -55,12 +42,12 @@ async function playMacOS(type: SoundType, customPath?: string): Promise<void> {
   const custom = getCustomSoundPath(type, customPath);
 
   if (custom) {
-    await execAsync(`afplay "${custom}"`);
+    await spawnAsync("afplay", [custom]);
     return;
   }
 
   const systemSound = SYSTEM_SOUNDS.darwin[type];
-  await execAsync(`afplay /System/Library/Sounds/${systemSound}.aiff`);
+  await spawnAsync("afplay", [`/System/Library/Sounds/${systemSound}.aiff`]);
 }
 
 async function playLinux(type: SoundType, customPath?: string): Promise<void> {
@@ -68,15 +55,15 @@ async function playLinux(type: SoundType, customPath?: string): Promise<void> {
 
   if (custom) {
     try {
-      await execAsync(`paplay "${custom}"`);
+      await spawnAsync("paplay", [custom]);
       return;
     } catch {
       try {
-        await execAsync(`aplay "${custom}"`);
+        await spawnAsync("aplay", [custom]);
         return;
       } catch {
         try {
-          await execAsync(`ffplay -nodisp -autoexit "${custom}"`);
+          await spawnAsync("ffplay", ["-nodisp", "-autoexit", custom]);
           return;
         } catch {
           // Fall through to system sound
@@ -87,10 +74,15 @@ async function playLinux(type: SoundType, customPath?: string): Promise<void> {
 
   const systemSound = SYSTEM_SOUNDS.linux[type];
   try {
-    await execAsync(`canberra-gtk-play -i ${systemSound}`);
+    await spawnAsync("canberra-gtk-play", ["-i", systemSound]);
   } catch {
     try {
-      await execAsync(`notify-send -i ${systemSound} "OpenCode Alert" "${type}"`);
+      await spawnAsync("notify-send", [
+        "-i",
+        systemSound,
+        "OpenCode Alert",
+        type,
+      ]);
     } catch {
       // Silent fallback
     }
@@ -101,14 +93,28 @@ async function playWindows(type: SoundType, customPath?: string): Promise<void> 
   const custom = getCustomSoundPath(type, customPath);
 
   if (custom) {
-    const psCommand = `Add-Type -AssemblyName System.Windows.Forms; $player = New-Object System.Media.SoundPlayer '${custom}'; $player.PlaySync()`;
-    await execAsync(`powershell -Command "${psCommand}"`);
-    return;
+    // Escape single quotes for PowerShell string literals
+    const escapedCustom = custom.replace(/'/g, "''");
+
+    // Try Windows Media Player COM object first (supports MP3)
+    try {
+      const psCommand = `$wmp = New-Object -ComObject WMPlayer.OCX.7; $wmp.URL = '${escapedCustom}'; $wmp.controls.play(); $timeout = (Get-Date).AddSeconds(30); while ($wmp.playState -ne 1 -and (Get-Date) -lt $timeout) { Start-Sleep -Milliseconds 100 }; $wmp.close()`;
+      await spawnAsync("powershell", ["-Command", psCommand]);
+      return;
+    } catch {
+      // Fallback to ffplay if available (cross-platform)
+      try {
+        await spawnAsync("ffplay", ["-nodisp", "-autoexit", custom]);
+        return;
+      } catch {
+        // Fall through to system sound
+      }
+    }
   }
 
   const systemSound = SYSTEM_SOUNDS.win32[type];
   const psCommand = `[System.Media.SystemSounds]::${systemSound}.Play()`;
-  await execAsync(`powershell -Command "${psCommand}"`);
+  await spawnAsync("powershell", ["-Command", psCommand]);
 }
 
 export async function playSound(type: SoundType, customPath?: string): Promise<void> {
