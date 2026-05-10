@@ -2,6 +2,8 @@ import { loadConfig } from "./config";
 import { playSound } from "./sound";
 import { showToast } from "./toast";
 
+export { playSound, showToast };
+
 export const OpenCodeAlert = async (ctx: any) => {
   const config = await loadConfig();
 
@@ -15,22 +17,28 @@ export const OpenCodeAlert = async (ctx: any) => {
   };
 
   return {
-    "session.idle": async () => {
-      await handleEvent("success", "OpenCode — Task Complete", "The AI has finished its task.");
-    },
-
-    "session.error": async () => {
-      await handleEvent("error", "OpenCode — Error", "Something went wrong. Check the session.");
-    },
-
-    "permission.asked": async () => {
-      await handleEvent("attention", "OpenCode — Attention Needed", "The AI needs your input to continue.");
-    },
-
-    "tui.toast.show": async (input: any) => {
-      if (input?.output?.type === "error") {
-        await handleEvent("error", "OpenCode — Error", input.output.message || "An error occurred.");
+    event: async ({ event }: { event: any }) => {
+      switch (event.type) {
+        case "session.idle": {
+          await handleEvent("success", "OpenCode — Task Complete", "The AI has finished its task.");
+          break;
+        }
+        case "session.error": {
+          const errorMessage = event.properties?.error?.message || "Something went wrong. Check the session.";
+          await handleEvent("error", "OpenCode — Error", errorMessage);
+          break;
+        }
+        case "tui.toast.show": {
+          if (event.properties?.variant === "error") {
+            await handleEvent("error", "OpenCode — Error", event.properties.message || "An error occurred.");
+          }
+          break;
+        }
       }
+    },
+
+    "permission.ask": async (_input: any, _output: any) => {
+      await handleEvent("attention", "OpenCode — Attention Needed", "The AI needs your input to continue.");
     },
   };
 };

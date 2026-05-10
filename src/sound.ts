@@ -1,11 +1,20 @@
 import { exec } from "child_process";
-import { promisify } from "util";
 import { platform } from "os";
 import { existsSync } from "fs";
 import { join, resolve } from "path";
 import { homedir } from "os";
 
-const execAsync = promisify(exec);
+function execAsync(command: string): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    exec(command, (error, stdout, stderr) => {
+      if (error) {
+        reject(error);
+      } else {
+        resolve({ stdout, stderr });
+      }
+    });
+  });
+}
 
 type SoundType = "success" | "attention" | "error";
 
@@ -58,7 +67,6 @@ async function playLinux(type: SoundType, customPath?: string): Promise<void> {
   const custom = getCustomSoundPath(type, customPath);
 
   if (custom) {
-    // Try paplay first, then aplay, then ffplay
     try {
       await execAsync(`paplay "${custom}"`);
       return;
@@ -81,11 +89,10 @@ async function playLinux(type: SoundType, customPath?: string): Promise<void> {
   try {
     await execAsync(`canberra-gtk-play -i ${systemSound}`);
   } catch {
-    // If canberra is not available, try notify-send with sound hint
     try {
       await execAsync(`notify-send -i ${systemSound} "OpenCode Alert" "${type}"`);
     } catch {
-      // Silent fallback — no sound available
+      // Silent fallback
     }
   }
 }
@@ -105,9 +112,7 @@ async function playWindows(type: SoundType, customPath?: string): Promise<void> 
 }
 
 export async function playSound(type: SoundType, customPath?: string): Promise<void> {
-  const currentPlatform = platform();
-
-  switch (currentPlatform) {
+  switch (platform()) {
     case "darwin":
       await playMacOS(type, customPath);
       break;
@@ -118,6 +123,6 @@ export async function playSound(type: SoundType, customPath?: string): Promise<v
       await playWindows(type, customPath);
       break;
     default:
-      throw new Error(`Unsupported platform: ${currentPlatform}`);
+      throw new Error(`Unsupported platform: ${platform()}`);
   }
 }

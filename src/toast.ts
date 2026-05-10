@@ -1,13 +1,20 @@
 import { exec } from "child_process";
-import { promisify } from "util";
 import { platform } from "os";
 
-const execAsync = promisify(exec);
+function execAsync(command: string): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    exec(command, (error, stdout, stderr) => {
+      if (error) {
+        reject(error);
+      } else {
+        resolve({ stdout, stderr });
+      }
+    });
+  });
+}
 
 export async function showToast(title: string, message: string): Promise<void> {
-  const currentPlatform = platform();
-
-  switch (currentPlatform) {
+  switch (platform()) {
     case "darwin":
       await showMacOSToast(title, message);
       break;
@@ -18,7 +25,7 @@ export async function showToast(title: string, message: string): Promise<void> {
       await showWindowsToast(title, message);
       break;
     default:
-      throw new Error(`Unsupported platform: ${currentPlatform}`);
+      throw new Error(`Unsupported platform: ${platform()}`);
   }
 }
 

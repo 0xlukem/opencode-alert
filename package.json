@@ -4,10 +4,19 @@
   "description": "Sound and toast notifications for OpenCode — know when the AI needs you",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "prepare": "npm run build"
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "prepublishOnly": "npm run build && npm test"
   },
   "keywords": [
     "opencode",
@@ -20,18 +29,25 @@
   ],
   "author": "Luke",
   "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "peerDependencies": {
     "@opencode-ai/plugin": "^1.0.0"
   },
   "devDependencies": {
     "@opencode-ai/plugin": "^1.0.0",
+    "@types/jest": "^29.5.14",
     "@types/node": "^25.6.2",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.4.9",
     "typescript": "^5.9.3"
   },
   "files": [
     "dist",
     "sounds",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "repository": {
     "type": "git",

@@ -1,13 +1,22 @@
 import type { Plugin } from "@opencode-ai/plugin";
 import { readFileSync, existsSync } from "fs";
-import { join } from "path";
-import { homedir } from "os";
+import { join, resolve } from "path";
+import { homedir, platform } from "os";
 import { exec } from "child_process";
-import { promisify } from "util";
-import { platform } from "os";
 
-const execAsync = promisify(exec);
-const currentPlatform = platform();
+// --- Exec Helper (no promisify for compatibility) ---
+
+function execAsync(command: string): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    exec(command, (error, stdout, stderr) => {
+      if (error) {
+        reject(error);
+      } else {
+        resolve({ stdout, stderr });
+      }
+    });
+  });
+}
 
 // --- Config ---
 
@@ -70,7 +79,7 @@ const SYSTEM_SOUNDS: Record<string, Record<SoundType, string>> = {
 
 function getCustomSoundPath(type: SoundType, customPath?: string): string | null {
   if (customPath && existsSync(customPath)) {
-    return customPath;
+    return resolve(customPath);
   }
   const configDir = join(homedir(), ".config", "opencode", "sounds");
   const defaultPath = join(configDir, `${type}.mp3`);
@@ -93,12 +102,33 @@ async function playMacOS(type: SoundType, customPath?: string): Promise<void> {
 async function playLinux(type: SoundType, customPath?: string): Promise<void> {
   const custom = getCustomSoundPath(type, customPath);
   if (custom) {
-    try { await execAsync(`paplay "${custom}"`); return; } catch {}
-    try { await execAsync(`aplay "${custom}"`); return; } catch {}
-    try { await execAsync(`ffplay -nodisp -autoexit "${custom}"`); return; } catch {}
+    try {
+      await execAsync(`paplay "${custom}"`);
+      return;
+    } catch {
+      try {
+        await execAsync(`aplay "${custom}"`);
+        return;
+      } catch {
+        try {
+          await execAsync(`ffplay -nodisp -autoexit "${custom}"`);
+          return;
+        } catch {
+          // Fall through to system sound
+        }
+      }
+    }
   }
   const systemSound = SYSTEM_SOUNDS.linux[type];
-  try { await execAsync(`canberra-gtk-play -i ${systemSound}`); } catch {}
+  try {
+    await execAsync(`canberra-gtk-play -i ${systemSound}`);
+  } catch {
+    try {
+      await execAsync(`notify-send -i ${systemSound} "OpenCode Alert" "${type}"`);
+    } catch {
+      // Silent fallback
+    }
+  }
 }
 
 async function playWindows(type: SoundType, customPath?: string): Promise<void> {
@@ -114,11 +144,18 @@ async function playWindows(type: SoundType, customPath?: string): Promise<void> 
 }
 
 async function playSound(type: SoundType, customPath?: string): Promise<void> {
-  switch (currentPlatform) {
-    case "darwin": await playMacOS(type, customPath); break;
-    case "linux": await playLinux(type, customPath); break;
-    case "win32": await playWindows(type, customPath); break;
-    default: throw new Error(`Unsupported platform: ${currentPlatform}`);
+  switch (platform()) {
+    case "darwin":
+      await playMacOS(type, customPath);
+      break;
+    case "linux":
+      await playLinux(type, customPath);
+      break;
+    case "win32":
+      await playWindows(type, customPath);
+      break;
+    default:
+      throw new Error(`Unsupported platform: ${platform()}`);
   }
 }
 
@@ -130,14 +167,22 @@ async function showMacOSToast(title: string, message: string): Promise<void> {
   try {
     await execAsync(`osascript -e 'display notification "${m}" with title "${t}"'`);
   } catch {
-    try { await execAsync(`terminal-notifier -title "${t}" -message "${m}"`); } catch {}
+    try {
+      await execAsync(`terminal-notifier -title "${t}" -message "${m}"`);
+    } catch {
+      // Silent fallback
+    }
   }
 }
 
 async function showLinuxToast(title: string, message: string): Promise<void> {
   const t = title.replace(/"/g, '\\"');
   const m = message.replace(/"/g, '\\"');
-  try { await execAsync(`notify-send "${t}" "${m}"`); } catch {}
+  try {
+    await execAsync(`notify-send "${t}" "${m}"`);
+  } catch {
+    // Silent fallback
+  }
 }
 
 async function showWindowsToast(title: string, message: string): Promise<void> {
@@ -151,15 +196,30 @@ async function showWindowsToast(title: string, message: string): Promise<void> {
     $toast = [Windows.UI.Notifications.ToastNotification]::new($template)
     [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("OpenCode Alert").Show($toast)
   `;
-  try { await execAsync(`powershell -Command "${ps}"`); } catch {}
+  try {
+    await execAsync(`powershell -Command "${ps}"`);
+  } catch {
+    try {
+      await execAsync(`powershell -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show('${m}', '${t}')"`);
+    } catch {
+      // Silent fallback
+    }
+  }
 }
 
 async function showToast(title: string, message: string): Promise<void> {
-  switch (currentPlatform) {
-    case "darwin": await showMacOSToast(title, message); break;
-    case "linux": await showLinuxToast(title, message); break;
-    case "win32": await showWindowsToast(title, message); break;
-    default: throw new Error(`Unsupported platform: ${currentPlatform}`);
+  switch (platform()) {
+    case "darwin":
+      await showMacOSToast(title, message);
+      break;
+    case "linux":
+      await showLinuxToast(title, message);
+      break;
+    case "win32":
+      await showWindowsToast(title, message);
+      break;
+    default:
+      throw new Error(`Unsupported platform: ${platform()}`);
   }
 }
 
@@ -178,19 +238,28 @@ export const OpenCodeAlert: Plugin = async (ctx) => {
   };
 
   return {
-    "session.idle": async () => {
-      await handle("success", "OpenCode — Task Complete", "The AI has finished its task.");
-    },
-    "session.error": async () => {
-      await handle("error", "OpenCode — Error", "Something went wrong. Check the session.");
-    },
-    "permission.asked": async () => {
-      await handle("attention", "OpenCode — Attention Needed", "The AI needs your input to continue.");
-    },
-    "tui.toast.show": async (input: any) => {
-      if (input?.output?.type === "error") {
-        await handle("error", "OpenCode — Error", input.output.message || "An error occurred.");
+    event: async ({ event }: { event: any }) => {
+      switch (event.type) {
+        case "session.idle": {
+          await handle("success", "OpenCode — Task Complete", "The AI has finished its task.");
+          break;
+        }
+        case "session.error": {
+          const errorMessage = event.properties?.error?.message || "Something went wrong. Check the session.";
+          await handle("error", "OpenCode — Error", errorMessage);
+          break;
+        }
+        case "tui.toast.show": {
+          if (event.properties?.variant === "error") {
+            await handle("error", "OpenCode — Error", event.properties.message || "An error occurred.");
+          }
+          break;
+        }
       }
+    },
+
+    "permission.ask": async (_input: any, _output: any) => {
+      await handle("attention", "OpenCode — Attention Needed", "The AI needs your input to continue.");
     },
   };
 };

@@ -15,32 +15,38 @@ This plugin solves that:
 
 ## Installation
 
-### From npm
+### From npm (recommended)
 
-```bash
-npm install opencode-alert
-```
+Add to your `opencode.json`:
 
-Then add to your `opencode.json`:
-
+**Global** (`~/.config/opencode/opencode.json`):
 ```json
 {
+  "$schema": "https://opencode.ai/config.json",
   "plugins": ["opencode-alert"]
 }
 ```
 
-### From local files
-
-Copy the plugin file to your OpenCode plugins directory:
-
-```bash
-mkdir -p ~/.config/opencode/plugins
-cp .opencode/plugins/alert.ts ~/.config/opencode/plugins/
+**Project-level** (`./opencode.json`):
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugins": ["opencode-alert"]
+}
 ```
 
-Or project-level:
+OpenCode will auto-install the plugin on next startup using Bun. **No manual `npm install` needed.**
+
+### For local development / testing
+
+Copy the plugin file directly to OpenCode's plugin directory:
 
 ```bash
+# Global plugins
+mkdir -p ~/.config/opencode/plugins
+cp .opencode/plugins/alert.ts ~/.config/opencode/plugins/
+
+# Or project-level plugins
 mkdir -p .opencode/plugins
 cp .opencode/plugins/alert.ts .opencode/plugins/
 ```
@@ -102,7 +108,6 @@ mkdir -p ~/.config/opencode/sounds
 2. Add your MP3 files:
 
 ```bash
-# macOS example using Finder
 cp ~/Downloads/my-success-sound.mp3 ~/.config/opencode/sounds/success.mp3
 cp ~/Downloads/my-attention-sound.mp3 ~/.config/opencode/sounds/attention.mp3
 cp ~/Downloads/my-error-sound.mp3 ~/.config/opencode/sounds/error.mp3
@@ -156,8 +161,6 @@ The plugin listens to three OpenCode events:
 | Custom MP3 sounds | Yes | Yes | Yes |
 | System sound fallback | Yes | Yes | Yes |
 | Toast notifications | Yes (osascript) | Yes (notify-send) | Yes (PowerShell) |
-| Focus detection | No | No | No |
-
 
 ## Disclaimer
 
