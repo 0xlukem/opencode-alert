@@ -1,5 +1,5 @@
 {
-  "name": "opencode-alert",
+  "name": "opencode-notify-me",
   "version": "1.0.0",
   "description": "Sound and toast notifications for OpenCode — know when the AI needs you",
   "main": "dist/index.js",
@@ -27,7 +27,7 @@
     "cli",
     "ai"
   ],
-  "author": "Luke",
+  "author": "Lucas Malizia",
   "license": "MIT",
   "engines": {
     "node": ">=18.0.0"
@@ -51,6 +51,6 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/luke/opencode-alert.git"
+    "url": "https://github.com/luke/opencode-notify-me.git"
   }
 }
