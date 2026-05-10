@@ -1,4 +1,6 @@
-# OpenCode Alert
+# OpenCode Notify Me
+
+[![npm version](https://badge.fury.io/js/opencode-notify-me.svg)](https://www.npmjs.com/package/opencode-notify-me)
 
 Sound and toast notifications for [OpenCode](https://opencode.ai). Know when the AI finishes, needs you, or hits an error — without staring at your terminal.
 
@@ -15,12 +17,16 @@ This plugin solves that:
 
 ## Installation
 
+```bash
+npm i opencode-notify-me
+```
+
 Add to your OpenCode config:
 
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugins": ["opencode-alert"]
+  "plugins": ["opencode-notify-me"]
 }
 ```
 

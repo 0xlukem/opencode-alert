@@ -106,7 +106,7 @@ async function runTests() {
   console.log("");
 
   console.log("--- Test 4: Toast notification ---");
-  await showToast("Test Title", "Test message from opencode-alert");
+  await showToast("Test Title", "Test message from opencode-notify-me");
   console.log("");
 
   console.log("--- Test 5: Custom sound path (non-existent, should fallback) ---");
