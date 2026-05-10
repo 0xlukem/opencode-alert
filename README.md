@@ -15,11 +15,8 @@ This plugin solves that:
 
 ## Installation
 
-### From npm (recommended)
+Add to your OpenCode config:
 
-Add to your `opencode.json`:
-
-**Global** (`~/.config/opencode/opencode.json`):
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
@@ -27,29 +24,7 @@ Add to your `opencode.json`:
 }
 ```
 
-**Project-level** (`./opencode.json`):
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "plugins": ["opencode-alert"]
-}
-```
-
-OpenCode will auto-install the plugin on next startup using Bun. **No manual `npm install` needed.**
-
-### For local development / testing
-
-Copy the plugin file directly to OpenCode's plugin directory:
-
-```bash
-# Global plugins
-mkdir -p ~/.config/opencode/plugins
-cp .opencode/plugins/alert.ts ~/.config/opencode/plugins/
-
-# Or project-level plugins
-mkdir -p .opencode/plugins
-cp .opencode/plugins/alert.ts .opencode/plugins/
-```
+OpenCode auto-installs on startup. No manual steps needed.
 
 ## Configuration
 
@@ -67,101 +42,19 @@ Create `~/.config/opencode/alert.json`:
 }
 ```
 
-### Disable Flags
-
-| Flag | Description |
-|------|-------------|
-| `soundEnabled: false` | Disable all sounds |
-| `toastEnabled: false` | Disable all toasts |
-| Both `false` | Completely silent |
-
-### Environment Variables
-
-You can also use env vars (take precedence over config file):
-
-```bash
-export OPENCODE_ALERT_DISABLE_SOUND=1   # Disable sounds
-export OPENCODE_ALERT_DISABLE_TOAST=1   # Disable toasts
-export OPENCODE_ALERT_DISABLE_ALL=1     # Disable everything
-```
-
-## Custom Sounds
-
-### Default Behavior
-
-By default, the plugin uses your operating system's built-in sounds:
-
-| State | macOS | Linux | Windows |
-|-------|-------|-------|---------|
-| Success | `Glass.aiff` | `dialog-information` | `SystemExclamation` |
-| Attention | `Submarine.aiff` | `dialog-warning` | `SystemAsterisk` |
-| Error | `Basso.aiff` | `dialog-error` | `SystemHand` |
-
-### Using Custom MP3s
-
-1. Create the sounds directory:
-
-```bash
-mkdir -p ~/.config/opencode/sounds
-```
-
-2. Add your MP3 files:
-
-```bash
-cp ~/Downloads/my-success-sound.mp3 ~/.config/opencode/sounds/success.mp3
-cp ~/Downloads/my-attention-sound.mp3 ~/.config/opencode/sounds/attention.mp3
-cp ~/Downloads/my-error-sound.mp3 ~/.config/opencode/sounds/error.mp3
-```
-
-3. Update your config:
-
-```json
-{
-  "sounds": {
-    "success": "~/.config/opencode/sounds/success.mp3",
-    "attention": "~/.config/opencode/sounds/attention.mp3",
-    "error": "~/.config/opencode/sounds/error.mp3"
-  }
-}
-```
-
-### macOS System Sounds
-
-You can use any of these built-in sounds without adding MP3s:
-
-`Basso`, `Blow`, `Bottle`, `Frog`, `Funk`, `Glass`, `Hero`, `Morse`, `Ping`, `Pop`, `Purr`, `Sosumi`, `Submarine`, `Tink`
-
-To preview a sound:
-
-```bash
-afplay /System/Library/Sounds/Glass.aiff
-```
-
-### Sound File Requirements
-
-- Format: MP3 (recommended), WAV, AIFF, or any format your OS can play
-- macOS: `afplay` supports AIFF, WAV, MP3, AAC
-- Linux: `paplay` (PulseAudio) supports WAV, OGG; `ffplay` supports almost anything
-- Windows: PowerShell `System.Media.SoundPlayer` supports WAV; custom MP3s use `ffplay` fallback
-
-## How It Works
-
-The plugin listens to three OpenCode events:
-
-| Event | Sound | Toast | When |
-|-------|-------|-------|------|
-| `session.idle` | Success sound | "Task Complete" | AI finishes a task |
-| `permission.asked` | Attention sound | "Attention Needed" | AI needs your input |
-| `session.error` | Error sound | "Error" | Something went wrong |
+Or use env vars (take precedence):
+- `OPENCODE_ALERT_DISABLE_SOUND=1`
+- `OPENCODE_ALERT_DISABLE_TOAST=1`
+- `OPENCODE_ALERT_DISABLE_ALL=1`
 
 ## Platform Support
 
 | Feature | macOS | Linux | Windows |
 |---------|-------|-------|---------|
-| Custom MP3 sounds | Yes | Yes | Yes |
+| Custom MP3 sounds | Yes (`afplay`) | Yes (`paplay`/`ffplay`) | Yes (WMP COM / `ffplay`) |
 | System sound fallback | Yes | Yes | Yes |
-| Toast notifications | Yes (osascript) | Yes (notify-send) | Yes (PowerShell) |
+| Toast notifications | Yes (`osascript`) | Yes (`notify-send`) | Yes (PowerShell) |
 
-## Disclaimer
+## License
 
-This project is not built by the OpenCode team and is not affiliated with OpenCode in any way.
+MIT © 2026 Lucas Malizia
